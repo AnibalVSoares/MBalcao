@@ -105,7 +105,6 @@
                 
                 <div id="content-email" class="content-wrapper">
                     <div class="info-box" id="original-email"></div>
-                    
                     <div id="display-email" style="display: none;"></div>
                     
                     <div class="expanded-list" id="list-email">
@@ -141,7 +140,6 @@
 
                 <div id="content-telefone" class="content-wrapper">
                     <div class="info-box" id="original-telefone"></div>
-                    
                     <div id="display-telefone" style="display: none;"></div>
 
                     <div class="expanded-list" id="list-telefone">
@@ -177,7 +175,6 @@
 
                 <div id="content-endereco" class="content-wrapper">
                     <div class="info-box address-box" id="original-endereco"></div>
-                    
                     <div id="display-endereco" style="display: none;"></div>
 
                     <div class="expanded-list" id="list-endereco">
@@ -271,15 +268,51 @@
             btnConfirmar.style.backgroundColor = 'var(--gov-blue)';
         }
 
+        // --- LÓGICA DO CHECKBOX DE HERANÇA ---
         function toggleSectionFamiliar(secaoId, isChecked, isFromLoad = false) {
-            if (!isFromLoad) habilitarEdicao();
+            if (!isFromLoad) {
+                if (isChecked) {
+                    // Busca referência no localStorage ou no window.parent para driblar bloqueios
+                    let refCpf = null;
+                    try { refCpf = window.parent['ref_' + secaoId]; } catch(e){}
+                    if (!refCpf) refCpf = localStorage.getItem('ref_' + secaoId);
+                    
+                    if (!refCpf || refCpf === 'novo' || refCpf === '') {
+                        alert("Por favor, selecione qual membro da família é a referência na tela de Composição Familiar ao lado antes de usar esta opção.");
+                        document.getElementById('check-' + secaoId).checked = false;
+                        return; 
+                    }
+                    
+                    // Busca dados do familiar referência no bancoLocal
+                    const refDados = bancoLocal[refCpf];
+                    if(!refDados) return;
+
+                    // Lógica para resgatar o dado: se tiver dado confirmado secundário, puxa ele. Se não, puxa o do GovBr.
+                    let dadoCopiado = "";
+                    if (secaoId === 'email') dadoCopiado = refDados.confirmados?.email || refDados.govbr.email.valor;
+                    if (secaoId === 'telefone') dadoCopiado = refDados.confirmados?.telefone || refDados.govbr.telefone.valor;
+                    if (secaoId === 'endereco') {
+                        if (refDados.confirmados?.endereco) {
+                            dadoCopiado = refDados.confirmados.endereco;
+                        } else {
+                            const end = refDados.govbr.endereco;
+                            const partesEnd = [end.logradouro, end.complemento, end.cidade, end.cep ? `CEP: ${end.cep}` : ""].filter(Boolean);
+                            dadoCopiado = partesEnd.join('<br>');
+                        }
+                    }
+                    
+                    // Preenche a tela e trava a edição visualmente
+                    processarSelecao(secaoId, dadoCopiado, false, true);
+                } else {
+                    // Limpa o processo de cópia se desmarcar
+                    fecharEConfirmarSelecaoInterna(secaoId);
+                    habilitarEdicao();
+                }
+            }
 
             const content = document.getElementById('content-' + secaoId);
             if (isChecked) {
                 content.classList.add('disabled-content');
-                if (secaoAbertaAtual === secaoId) {
-                    fecharEConfirmarSelecaoInterna(secaoId);
-                }
             } else {
                 content.classList.remove('disabled-content');
             }
@@ -287,6 +320,24 @@
         }
 
         function toggleGlobalFamiliar(isChecked, isFromLoad = false) {
+            if (isChecked && !isFromLoad) {
+                let refEmail = null; let refTel = null; let refEnd = null;
+                try {
+                    refEmail = window.parent['ref_email'];
+                    refTel = window.parent['ref_telefone'];
+                    refEnd = window.parent['ref_endereco'];
+                } catch(e){}
+                if(!refEmail) refEmail = localStorage.getItem('ref_email');
+                if(!refTel) refTel = localStorage.getItem('ref_telefone');
+                if(!refEnd) refEnd = localStorage.getItem('ref_endereco');
+                
+                if (!refEmail || refEmail === 'novo' || !refTel || refTel === 'novo' || !refEnd || refEnd === 'novo') {
+                    alert("Por favor, selecione as referências para E-mail, Telefone e Endereço na tela ao lado antes de usar a opção global.");
+                    document.getElementById('global-familiar-check').checked = false;
+                    return;
+                }
+            }
+
             const sections = ['email', 'telefone', 'endereco'];
             sections.forEach(sec => {
                 document.getElementById('check-' + sec).checked = isChecked;
@@ -301,6 +352,7 @@
             document.getElementById('global-familiar-check').checked = (emailChecked && telChecked && endChecked);
         }
 
+        // --- RENDERIZAR TELA ---
         function carregarDados(cpf) {
             cpfAtual = cpf;
             selecoesPendentes = { email: null, telefone: null, endereco: null };
@@ -333,6 +385,7 @@
             });
             secaoAbertaAtual = null;
 
+            // Restaura estado de "Familiares" caso o usuário volte em um CPF salvo
             document.getElementById('check-email').checked = dados.familiarEmail || false;
             toggleSectionFamiliar('email', dados.familiarEmail || false, true);
 
@@ -389,26 +442,14 @@
                 </label>
             `).join('');
 
+            // Mostra os dados secundários salvos
             ['email', 'telefone', 'endereco'].forEach(secaoId => {
-                if (dados.confirmados[secaoId] && !dados['familiar' + secaoId.charAt(0).toUpperCase() + secaoId.slice(1)]) {
+                if (dados.confirmados[secaoId]) {
                     const valor = dados.confirmados[secaoId];
-                    selecoesPendentes[secaoId] = valor; 
+                    const isFamiliar = dados['familiar' + secaoId.charAt(0).toUpperCase() + secaoId.slice(1)];
                     
-                    const containerDisplay = document.getElementById('display-' + secaoId);
-                    const botaoAcao = document.getElementById('btn-' + secaoId);
-
-                    containerDisplay.innerHTML = `
-                        <div class="info-box" style="${secaoId === 'endereco' ? 'align-items: flex-start;' : ''}">
-                            <div class="info-text">
-                                ${secaoId === 'endereco' ? '<strong style="font-size:12px; display:block; margin-bottom:4px;">OUTRO</strong>' : ''}
-                                ${valor} <span class="hint">${secaoId !== 'endereco' ? '(Secundário)' : ''}</span><br>
-                                <span class="badge" style="background-color:#e0e0e0; color:#333; margin-left:0; margin-top:8px;">Adicionado</span>
-                            </div>
-                        </div>
-                    `;
-                    containerDisplay.style.display = 'block';
-                    botaoAcao.innerHTML = `<span>✎</span> Alterar seleção`;
-                    botaoAcao.style.display = 'flex';
+                    // Renderiza chamando a função processarSelecao indicando o status (Familiar ou Normal)
+                    processarSelecao(secaoId, valor, true, isFamiliar);
                 }
             });
         }
@@ -421,11 +462,9 @@
             }
             document.getElementById('btn-' + secaoId).style.display = 'none';
             document.getElementById('display-' + secaoId).style.display = 'none';
-            
             const lista = document.getElementById('list-' + secaoId);
             lista.style.display = 'block';
             document.getElementById('add-form-' + secaoId).style.display = 'none';
-            
             setTimeout(() => { lista.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
             secaoAbertaAtual = secaoId;
         }
@@ -496,11 +535,12 @@
                 botaoAcao.innerHTML = `<span>+</span> Selecionar outro ${secaoId}`;
                 botaoAcao.style.display = 'flex';
                 containerLista.style.display = 'none';
+                document.getElementById('display-' + secaoId).style.display = 'none'; 
             }
             secaoAbertaAtual = null;
         }
 
-        function processarSelecao(secaoId, valor, isRestore = false) {
+        function processarSelecao(secaoId, valor, isRestore = false, isFamiliar = false) {
             if(!isRestore) habilitarEdicao(); 
             selecoesPendentes[secaoId] = valor; 
 
@@ -511,23 +551,35 @@
 
             document.getElementById('original-' + secaoId).style.display = 'flex';
 
+            let badgeHtml = isFamiliar 
+                ? '<span class="badge" style="background-color:#e0e0e0; color:#333; margin-left:0; margin-top:8px;">Dado Herdado da Família</span>'
+                : '<span class="badge badge-warning">⚠️ Aguardando confirmação</span>';
+
             containerDisplay.innerHTML = `
                 <div class="info-box selected-box" style="${secaoId === 'endereco' ? 'align-items: flex-start;' : ''}">
                     <div class="info-text">
                         ${secaoId === 'endereco' ? '<strong style="font-size:12px; display:block; margin-bottom:4px;">OUTRO</strong>' : ''}
-                        ${valor} <span class="hint">${secaoId !== 'endereco' ? '(Secundário)' : ''}</span><br>
-                        <span class="badge badge-warning">⚠️ Aguardando confirmação</span>
+                        ${valor} <span class="hint">${secaoId !== 'endereco' && !isFamiliar ? '(Secundário)' : ''}</span><br>
+                        ${badgeHtml}
                     </div>
                 </div>
             `;
             containerDisplay.style.display = 'block';
+            
             botaoAcao.innerHTML = `<span>✎</span> Alterar seleção`;
-            botaoAcao.style.display = 'flex';
+            // Esconde botão de alteração se o dado for familiar
+            if (isFamiliar) {
+                botaoAcao.style.display = 'none';
+            } else {
+                botaoAcao.style.display = 'flex';
+            }
+            
             containerLista.style.display = 'none';
             addForm.style.display = 'none';
             secaoAbertaAtual = null;
         }
 
+        // --- FUNÇÃO CORRIGIDA DE GRAVAR E CONFIRMAR DADOS ---
         function confirmarTudo() {
             if (secaoAbertaAtual !== null) {
                 fecharEConfirmarSelecaoInterna(secaoAbertaAtual);
@@ -539,27 +591,21 @@
             dados.confirmados = dados.confirmados || {};
 
             dados.familiarEmail = document.getElementById('check-email').checked;
-            if (dados.familiarEmail) {
-                dados.confirmados.email = "Mesmo contato da família";
-            } else if (selecoesPendentes.email) {
+            if (selecoesPendentes.email) {
                 dados.confirmados.email = selecoesPendentes.email;
             } else {
                 delete dados.confirmados.email;
             }
 
             dados.familiarTelefone = document.getElementById('check-telefone').checked;
-            if (dados.familiarTelefone) {
-                dados.confirmados.telefone = "Mesmo contato da família";
-            } else if (selecoesPendentes.telefone) {
+            if (selecoesPendentes.telefone) {
                 dados.confirmados.telefone = selecoesPendentes.telefone;
             } else {
                 delete dados.confirmados.telefone;
             }
 
             dados.familiarEndereco = document.getElementById('check-endereco').checked;
-            if (dados.familiarEndereco) {
-                dados.confirmados.endereco = "Mesmo endereço da família";
-            } else if (selecoesPendentes.endereco) {
+            if (selecoesPendentes.endereco) {
                 dados.confirmados.endereco = selecoesPendentes.endereco;
             } else {
                 delete dados.confirmados.endereco;

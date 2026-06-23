@@ -38,7 +38,6 @@
         .badge-rel { background-color: #e5e7eb; color: var(--text-main); }
         .badge-alert { background-color: #fef08a; color: #854d0e; border: 1px solid #fde047; }
 
-        /* NOVOS ESTILOS - Contatos da Família */
         .btn-family { width: 100%; background: #fff; border: 2px dashed var(--gov-blue); color: var(--gov-blue); padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .btn-family:hover { background: var(--card-hover); }
         .btn-family span { font-size: 20px; font-weight: normal; }
@@ -116,49 +115,46 @@
                 </p>
 
                 <label>ENDEREÇO DA FAMÍLIA</label>
-                <select>
+                <select id="ref_endereco" onchange="salvarReferencia('endereco', this.value)">
                     <option value="" disabled selected>Selecione um membro referência...</option>
-                    <option value="345">João Oliveira da Silva (CPF: 345.678.901-23)</option>
-                    <option value="456">Maria Joana de Souza (CPF: 456.789.012-34)</option>
-                    <option value="567">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
-                    <option value="678">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
+                    <option value="345.678.901-23">João Oliveira da Silva (CPF: 345.678.901-23)</option>
+                    <option value="456.789.012-34">Maria Joana de Souza (CPF: 456.789.012-34)</option>
+                    <option value="567.890.123-45">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
+                    <option value="678.901.234-56">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
                     <option value="novo" style="font-weight: bold;">Adicionar novo</option>
                 </select>
 
                 <label>TELEFONE DA FAMÍLIA</label>
-                <select>
+                <select id="ref_telefone" onchange="salvarReferencia('telefone', this.value)">
                     <option value="" disabled selected>Selecione um membro referência...</option>
-                    <option value="345">João Oliveira da Silva (CPF: 345.678.901-23)</option>
-                    <option value="456">Maria Joana de Souza (CPF: 456.789.012-34)</option>
-                    <option value="567">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
-                    <option value="678">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
+                    <option value="345.678.901-23">João Oliveira da Silva (CPF: 345.678.901-23)</option>
+                    <option value="456.789.012-34">Maria Joana de Souza (CPF: 456.789.012-34)</option>
+                    <option value="567.890.123-45">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
+                    <option value="678.901.234-56">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
                     <option value="novo" style="font-weight: bold;">Adicionar novo</option>
                 </select>
 
                 <label>E-MAIL DA FAMÍLIA</label>
-                <select>
+                <select id="ref_email" onchange="salvarReferencia('email', this.value)">
                     <option value="" disabled selected>Selecione um membro referência...</option>
-                    <option value="345">João Oliveira da Silva (CPF: 345.678.901-23)</option>
-                    <option value="456">Maria Joana de Souza (CPF: 456.789.012-34)</option>
-                    <option value="567">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
-                    <option value="678">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
+                    <option value="345.678.901-23">João Oliveira da Silva (CPF: 345.678.901-23)</option>
+                    <option value="456.789.012-34">Maria Joana de Souza (CPF: 456.789.012-34)</option>
+                    <option value="567.890.123-45">Pedro Oliveira da Silva (CPF: 567.890.123-45)</option>
+                    <option value="678.901.234-56">Ana Oliveira da Silva (CPF: 678.901.234-56)</option>
                     <option value="novo" style="font-weight: bold;">Adicionar novo</option>
                 </select>
             </div>
-            </div>
+
+        </div>
     </div>
 
     <script>
         function selecionarCPF(cpf, elemento) {
-            // Remove a classe 'active' de todos os cards e adiciona ao clicado
             document.querySelectorAll('.member-card').forEach(card => card.classList.remove('active'));
             elemento.classList.add('active');
-
-            // Envia mensagem segura para o frame pai (index.html), que repassará para a Atualizacao.html
             window.parent.postMessage({ acao: 'mudarCPF', cpf: cpf }, '*');
         }
 
-        // Nova função para abrir/fechar o formulário de contatos da família
         function toggleFamilyForm() {
             const form = document.getElementById('form-family-contacts');
             const btn = document.getElementById('btn-toggle-family');
@@ -169,12 +165,28 @@
             } else {
                 form.style.display = 'block';
                 btn.innerHTML = 'Definir contatos da família <span>-</span>';
-                // Faz scroll suave para mostrar o formulário inteiro
                 setTimeout(() => {
                     form.scrollIntoView({ behavior: 'smooth', block: 'end' });
                 }, 100);
             }
         }
+
+        // Ponte de comunicação direta global (evita erros de origem nula em arquivos locais)
+        function salvarReferencia(tipo, cpf) {
+            localStorage.setItem('ref_' + tipo, cpf);
+            try { window.parent['ref_' + tipo] = cpf; } catch(e) {}
+        }
+
+        window.onload = () => {
+            ['email', 'telefone', 'endereco'].forEach(tipo => {
+                let val = localStorage.getItem('ref_' + tipo);
+                try { if (!val && window.parent['ref_' + tipo]) val = window.parent['ref_' + tipo]; } catch(e) {}
+                if(val) {
+                    const select = document.getElementById('ref_' + tipo);
+                    if(select) select.value = val;
+                }
+            });
+        };
     </script>
 </body>
 </html>
